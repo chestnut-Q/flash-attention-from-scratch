@@ -79,10 +79,10 @@ int main(int argc, char const *argv[])
 	{
 		int n = test_sizes[isize];
 
-		read_from_file (cpu_Q,  n*n, "/home/2024-fall/dataset/hw3/Q_value/q_", isize);
-		read_from_file (cpu_K,  n*n, "/home/2024-fall/dataset/hw3/K_value/k_", isize);
-		read_from_file (cpu_V,  n*n, "/home/2024-fall/dataset/hw3/V_value/v_", isize);
-		read_from_file (cpu_Yt, n*n, "/home/2024-fall/dataset/hw3/output_value/output_", isize);
+		read_from_file (cpu_Q,  n*n, "/home/qinruoyu/attention-code/hw3/Q_value/q_", isize);
+		read_from_file (cpu_K,  n*n, "/home/qinruoyu/attention-code/hw3/K_value/k_", isize);
+		read_from_file (cpu_V,  n*n, "/home/qinruoyu/attention-code/hw3/V_value/v_", isize);
+		read_from_file (cpu_Yt, n*n, "/home/qinruoyu/attention-code/hw3/output_value/output_", isize);
 		memset (cpu_Y, 0, n * n * sizeof(float));
 
 		cudaMemcpy(gpu_Q, cpu_Q, sizeof(float) * n*n, cudaMemcpyHostToDevice);
@@ -128,8 +128,8 @@ int main(int argc, char const *argv[])
 		double total_err = 0.0;
 		for (int i = 0; i < n*n ; ++i)
 		total_err += abs(cpu_Y[i] - cpu_Yt[i]);
-		// printf("total_err: %.8lf\n", total_err);
-		if (total_err > 100*n*n*FLT_EPSILON){
+		printf("total_err: %.8lf\n", total_err);
+		if (total_err > 100*n*FLT_EPSILON*n){
 			die("*** FAILURE *** Error in calculation exceeds componentwise error bounds.\n" );
 		}
 	}

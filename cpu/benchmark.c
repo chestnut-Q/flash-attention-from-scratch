@@ -89,10 +89,10 @@ int main(int argc, char* argv[])
         memset (Y, 0, n * n * sizeof(float));
         if (rank == 0)
         {
-          read_from_file (Q,  n*n, "/home/2024-fall/dataset/hw3/Q_value/q_", isize);
-          read_from_file (K,  n*n, "/home/2024-fall/dataset/hw3/K_value/k_", isize);
-          read_from_file (V,  n*n, "/home/2024-fall/dataset/hw3/V_value/v_", isize);
-          read_from_file (Yt, n*n, "/home/2024-fall/dataset/hw3/output_value/output_", isize);
+          read_from_file (Q,  n*n, "/home/qinruoyu/attention-code/hw3/Q_value/q_", isize);
+          read_from_file (K,  n*n, "/home/qinruoyu/attention-code/hw3/K_value/k_", isize);
+          read_from_file (V,  n*n, "/home/qinruoyu/attention-code/hw3/V_value/v_", isize);
+          read_from_file (Yt, n*n, "/home/qinruoyu/attention-code/hw3/output_value/output_", isize);
         }
         MPI_Barrier(MPI_COMM_WORLD);
 
