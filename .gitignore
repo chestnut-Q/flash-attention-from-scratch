@@ -1,2 +1,4 @@
 *.o
 opt
+hw3/
+naive
