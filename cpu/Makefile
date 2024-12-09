@@ -1,12 +1,12 @@
 
 CC = mpicxx
-OPT = 
-CFLAGS = -Wall -DGETTIMEOFDAY -std=c++11 $(OPT)
+OPT = -Ofast -unroll
+CFLAGS = -Wall -DGETTIMEOFDAY -std=c++11 $(OPT) -march=skylake-avx512 -fopenmp
 LDFLAGS = -Wall 
-LDLIBS = -lpthread -lm
+LDLIBS = -lpthread -lm -fopenmp
 
-targets =  naive opt 
-objects =  benchmark.o naive.o opt.o 
+targets =  naive opt sgemm
+objects =  benchmark.o naive.o opt.o benchmark_sgemm.o sgemm.o
 
 .PHONY : default
 default : all
@@ -16,7 +16,9 @@ all : clean $(targets)
 
 naive : benchmark.o naive.o
 	$(CC) -o $@ $^ $(LDLIBS)
-opt : benchmark.o opt.o
+opt : benchmark.o sgemm.o opt.o
+	$(CC) -o $@ $^ $(LDLIBS)
+sgemm : benchmark_sgemm.o sgemm.o
 	$(CC) -o $@ $^ $(LDLIBS)
 
 %.o : %.c
