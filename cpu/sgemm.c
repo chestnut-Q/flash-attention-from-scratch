@@ -1,22 +1,24 @@
 #include "immintrin.h"
 #include "omp.h"
-#include <cstdio>
+#include <stdio.h>
+#include <assert.h>
 
 const char* sgemm_desc = "Final sgemm.";
 
 #define min(a,b) (((a)<(b))?(a):(b))
 #define max(a,b) (((a)>(b))?(a):(b))
 
-static void packing_a_32(float *src, float *dst, int lda, int M0, int K0, int M_padding) {
+static void packing_a_32(float alpha, float *src, float *dst, int lda, int M0, int K0, int M_padding) {
   float *src_ptr, *dst_ptr;
   dst_ptr = dst;
   int count_first, count_second, count_sub = M0;
+  __m512 valpha=_mm512_set1_ps(alpha);
   int i;
   for (count_first = 0; count_sub > 31; count_first += 32, count_sub -= 32) {
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
-      _mm512_store_ps(dst_ptr, _mm512_loadu_ps(src_ptr));
-      _mm512_store_ps(dst_ptr + 16, _mm512_loadu_ps(src_ptr + 16));  
+      _mm512_store_ps(dst_ptr, _mm512_mul_ps(_mm512_loadu_ps(src_ptr), valpha));
+      _mm512_store_ps(dst_ptr + 16, _mm512_mul_ps(_mm512_loadu_ps(src_ptr + 16), valpha));  
       src_ptr += lda;
       dst_ptr += 32;
     }
@@ -26,7 +28,7 @@ static void packing_a_32(float *src, float *dst, int lda, int M0, int K0, int M_
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
       for (i = 0; i < count_sub; i++) {
-          *(dst_ptr + i) = *(src_ptr + i);
+          *(dst_ptr + i) = *(src_ptr + i) * alpha;
       }
       src_ptr += lda;
       dst_ptr += 32;
@@ -38,25 +40,26 @@ static void packing_a_32(float *src, float *dst, int lda, int M0, int K0, int M_
   for (; count_sub > 0; count_first++, count_sub--) {
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
-      *dst_ptr = *src_ptr;
+      *dst_ptr = *src_ptr * alpha;
       src_ptr += lda;
       dst_ptr++;
     }
   }
 }
 
-static void packing_a_64(float *src, float *dst, int lda, int M0, int K0, int M_padding) {
+static void packing_a_64(float alpha, float *src, float *dst, int lda, int M0, int K0, int M_padding) {
   float *src_ptr, *dst_ptr;
   dst_ptr = dst;
   int count_first, count_second, count_sub = M0;
+  __m512 valpha=_mm512_set1_ps(alpha);
   int i;
   for (count_first = 0; count_sub > 63; count_first += 64, count_sub -= 64) {
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
-      _mm512_store_ps(dst_ptr, _mm512_loadu_ps(src_ptr));
-      _mm512_store_ps(dst_ptr + 16, _mm512_loadu_ps(src_ptr + 16));  
-      _mm512_store_ps(dst_ptr + 32, _mm512_loadu_ps(src_ptr + 32));  
-      _mm512_store_ps(dst_ptr + 48, _mm512_loadu_ps(src_ptr + 48));      
+      _mm512_store_ps(dst_ptr, _mm512_mul_ps(_mm512_loadu_ps(src_ptr), valpha));
+      _mm512_store_ps(dst_ptr + 16, _mm512_mul_ps(_mm512_loadu_ps(src_ptr + 16), valpha));  
+      _mm512_store_ps(dst_ptr + 32, _mm512_mul_ps(_mm512_loadu_ps(src_ptr + 32), valpha));  
+      _mm512_store_ps(dst_ptr + 48, _mm512_mul_ps(_mm512_loadu_ps(src_ptr + 48), valpha));      
       src_ptr += lda;
       dst_ptr += 64;
     }
@@ -67,7 +70,7 @@ static void packing_a_64(float *src, float *dst, int lda, int M0, int K0, int M_
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
       for (i = 0; i < count_sub; i++) {
-          *(dst_ptr + i) = *(src_ptr + i);
+          *(dst_ptr + i) = *(src_ptr + i) * alpha;
       }
       src_ptr += lda;
       dst_ptr += 64;
@@ -79,8 +82,8 @@ static void packing_a_64(float *src, float *dst, int lda, int M0, int K0, int M_
   for (; count_sub > 31; count_first += 32, count_sub -= 32) {
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
-      _mm512_store_ps(dst_ptr, _mm512_loadu_ps(src_ptr));
-      _mm512_store_ps(dst_ptr + 16, _mm512_loadu_ps(src_ptr + 16));      
+      _mm512_store_ps(dst_ptr, _mm512_mul_ps(_mm512_loadu_ps(src_ptr), valpha));
+      _mm512_store_ps(dst_ptr + 16, _mm512_mul_ps(_mm512_loadu_ps(src_ptr + 16), valpha));      
       src_ptr += lda;
       dst_ptr += 32;
     }
@@ -91,7 +94,7 @@ static void packing_a_64(float *src, float *dst, int lda, int M0, int K0, int M_
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
       for (i = 0; i < count_sub; i++) {
-          *(dst_ptr + i) = *(src_ptr + i);
+          *(dst_ptr + i) = *(src_ptr + i) * alpha;
       }
       src_ptr += lda;
       dst_ptr += 32;
@@ -103,7 +106,7 @@ static void packing_a_64(float *src, float *dst, int lda, int M0, int K0, int M_
   for (; count_sub > 0; count_first++, count_sub--) {
     src_ptr = src + count_first;
     for (count_second = 0; count_second < K0; count_second++) {
-      *dst_ptr = *src_ptr;
+      *dst_ptr = *src_ptr * alpha;
       src_ptr += lda;
       dst_ptr++;
     }
@@ -662,26 +665,37 @@ static void macro_kernel_nopacking(float *__restrict__ A, float *__restrict__ B,
  * 
  */
 
-static inline void partition_m_dim(const int ithr, const int nthrs, const int m, int *offset, int *block)
+static inline void partition_m_dim(const int ithr, const int nthrs, const int m, int *offset, int *length)
 {
-    int band = m / nthrs;
-    int tail = m - (nthrs - 1) * band;
-    if (tail > (band + 1)){
-        band++;
-    }
-    tail = m - (nthrs - 1) * band;
-    if (ithr < (nthrs - 1)){
-        *block = band;
-    }else{
-        *block = tail;
-    }
-    *offset = ithr * band;
-    if (*offset >= m) {
-        *block = 0;
-        *offset = 0;
-    }else if ((*offset + *block) > m) {
-        *block = m - *offset;
-    }
+  assert(m % 32 == 0);
+  int base = (m / nthrs) / 64;
+  int remain = m - base * nthrs * 64;
+  int addi_thrs = remain / 64;
+  remain = remain - addi_thrs * 64;
+  if (ithr < addi_thrs) {
+    *length = (base + 1) * 64;
+    *offset = (base + 1) * 64 * ithr;
+  } else if (ithr == addi_thrs) {
+    *length = base * 64 + remain;
+    *offset = (base + 1) * 64 * ithr;
+  } else {
+    *length = base * 64;
+    *offset = (base + 1) * 64 * addi_thrs + remain + base * 64 * (ithr - addi_thrs);
+  }
+}
+
+static inline void partition_n_dim(const int ithr, const int nthrs, const int m, int *offset, int *length, int size)
+{
+  assert(m % size == 0);
+  int base = (m / nthrs) / size;
+  int addi_thrs = m / size;
+  if (ithr < addi_thrs) {
+    *length = (base + 1) * size;
+    *offset = (base + 1) * size * ithr;
+  } else {
+    *length = base * size;
+    *offset = (base + 1) * size * addi_thrs + base * size * (ithr - addi_thrs);
+  }
 }
 
 static inline int div_up(int a, int b){
@@ -704,174 +718,77 @@ static inline int get_n_padd_parallel_a(int n, int nthr, int N_BLOCKING)
     return n_padd;
 }
 
-/* This routine performs a sgemm operation
- *  C := C + A * B
- * where A, B, and C are MxK, KxN, MxN matrices stored in column-major format.
- * On exit, A and B maintain their input values. */  
 void custom_sgemm(int M, int K, int N, float* A, float* B, float* C, float alpha) {
-  int m, n, k, M0, N0, K0, M_padding = 0;
-  int lda = M, ldb = K, ldc = M;
-  int M_BLOCK_SIZE, N_BLOCK_SIZE, K_BLOCK_SIZE, ALIGNMENT_SIZE;
   float *b_buffer_global = NULL;
 
-  if (lda < 100) {
-    M_BLOCK_SIZE = 128, N_BLOCK_SIZE = 512, K_BLOCK_SIZE = 128, ALIGNMENT_SIZE = 512;
-  } else {
+  #pragma omp parallel
+  {
+    int m, n, k, M0, N0, K0, M_padding = 0;
+    int lda = M, ldb = K, ldc = M;
+    int M_BLOCK_SIZE, N_BLOCK_SIZE, K_BLOCK_SIZE, ALIGNMENT_SIZE;
     M_BLOCK_SIZE = 512, N_BLOCK_SIZE = 2048, K_BLOCK_SIZE = 512, ALIGNMENT_SIZE = 512;
-  }
 
-  // #pragma omp parallel
-  // {
-  //   int nthr = omp_get_num_threads();
-  //   int ithr = omp_get_thread_num();
-  //   printf("n:%d, i: %d\n", nthr, ithr);
-  //   int m_offset = 0, m_block = 0;
-  //   partition_m_dim(ithr, nthr, M, &m_offset, &m_block);
+    int nthr = omp_get_num_threads();
+    int ithr = omp_get_thread_num();
+    
+    int m_offset = 0, m_length = 0;
+    partition_m_dim(ithr, nthr, M, &m_offset, &m_length);
 
-  //   int m_count, n_count, k_count;
-  //   int m_inc, n_inc, k_inc;
-  //   float *a_buffer_local = NULL;
-  //   float *b_buffer_local = NULL;
-  //   if (ithr == 0) {
-  //     b_buffer_global = (float *) aligned_alloc(ALIGNMENT_SIZE, K_BLOCK_SIZE * N_BLOCK_SIZE * sizeof(float));
-  //   }
-  //   #pragma omp barrier
-  //   b_buffer_local = b_buffer_global;
-  //   for (k = 0; k < K; k += K_BLOCK_SIZE) {
-  //     K0 = min(K_BLOCK_SIZE, K - k);
-  //     // parallel copy for A packing
-  //     for (n = 0; n < N; n += N_BLOCK_SIZE) {
-  //       N0 = min(N_BLOCK_SIZE, N - n);
-  //       int band = (n_inc + nthr - 1) / nthr;
-  //       band = rnd_up(band, 8);
-  //       int offset = band * ithr;
-  //       if (offset > n_inc) { offset = 0; band = 0; }
-  //       if (offset + band > n_inc) { band = n_inc - offset; }
-  //       if (band > 0) {
-  //         packing_b_8(B + k + n * ldb, b_buffer_local, ldb, K0, N0);
-  //       }
-  //       #pragma omp barrier
-  //       if (!a_buffer_local) {
-  //         float *a_buffer_local = (float *) aligned_alloc(ALIGNMENT_SIZE, K_BLOCK_SIZE * M_BLOCK_SIZE * sizeof(float));
-  //       }
-  //       for (m = 0; m < M; m += M_BLOCK_SIZE) {
-  //         M0 = min(M_BLOCK_SIZE, M - m);
-  //         M_padding = M0 % 32 > 16 ? 32 - M0 % 32 : 0;
-  //         packing_a_32(A + m + k * lda, a_buffer_local, lda, M0, K0, M_padding); // pad to 32
-  //         macro_kernel_small(a_buffer_local, b_buffer_local, C + m + n * ldc, M0, K0, N0, ldc, M_padding);
-  //       }
-  //       #pragma omp barrier
-  //     }
-  //   }
-  //   if (a_buffer_local) { free(a_buffer_local); }
-  // }
-  // if (b_buffer_global) { free(b_buffer_global); }
+    float *a_buffer_local = NULL;
+    float *b_buffer_local = NULL;
+    if (ithr == 0) {
+      b_buffer_global = (float *) aligned_alloc(ALIGNMENT_SIZE, K_BLOCK_SIZE * N_BLOCK_SIZE * sizeof(float));
+    }
+    #pragma omp barrier
+    b_buffer_local = b_buffer_global;
 
-  float *a_buffer = (float *) aligned_alloc(ALIGNMENT_SIZE, K_BLOCK_SIZE * M_BLOCK_SIZE * sizeof(float));
-  float *b_buffer = (float *) aligned_alloc(ALIGNMENT_SIZE, K_BLOCK_SIZE * N_BLOCK_SIZE * sizeof(float));
-
-  if (lda < 100) {
-    // small matrix: 32xkx8, packing
-    for (n = 0; n < N; n += N_BLOCK_SIZE) {
-      N0 = min(N_BLOCK_SIZE, N - n);
+    if (lda < 64) { // small matrix: 32xkx8, packing
       for (k = 0; k < K; k += K_BLOCK_SIZE) {
         K0 = min(K_BLOCK_SIZE, K - k);
-          packing_b_8(B + k + n * ldb, b_buffer, ldb, K0, N0);
-        for (m = 0; m < M; m += M_BLOCK_SIZE) {
-          M0 = min(M_BLOCK_SIZE, M - m);
-          M_padding = M0 % 32 > 16 ? 32 - M0 % 32 : 0;
-          packing_a_32(A + m + k * lda, a_buffer, lda, M0, K0, M_padding); // pad to 32
-          macro_kernel_small(a_buffer, b_buffer, C + m + n * ldc, M0, K0, N0, ldc, M_padding);
+        for (n = 0; n < N; n += N_BLOCK_SIZE) {
+          N0 = min(N_BLOCK_SIZE, N - n);
+          if (ithr == 0) {
+            packing_b_8(B + k + n * ldb, b_buffer_local, ldb, K0, N0);
+          }
+          #pragma omp barrier
+          if (m_length > 0 && !a_buffer_local) {
+            a_buffer_local = (float *) aligned_alloc(ALIGNMENT_SIZE, K_BLOCK_SIZE * M_BLOCK_SIZE * sizeof(float));
+          }
+          for (m = 0; m < m_length; m += M_BLOCK_SIZE) {
+            M0 = min(M_BLOCK_SIZE, m_length - m);
+            M_padding = M0 % 32 > 16 ? 32 - M0 % 32 : 0;
+            packing_a_32(alpha, A + (m_offset + m) + k * lda, a_buffer_local, lda, M0, K0, M_padding); // pad to 32
+            macro_kernel_small(a_buffer_local, b_buffer_local, C + (m_offset + m) + n * ldc, M0, K0, N0, ldc, M_padding);
+          }
+          #pragma omp barrier
+        }
+      }
+    } else { // large matrix: 64xkx4 and 32xkx4, packing
+      for (k = 0; k < K; k += K_BLOCK_SIZE) {
+        K0 = min(K_BLOCK_SIZE, K - k);
+        for (n = 0; n < N; n += N_BLOCK_SIZE) {
+          N0 = min(N_BLOCK_SIZE, N - n);
+          if (ithr == 0) {
+            packing_b_4(B + k + n * ldb, b_buffer_local, ldb, K0, N0);
+          }
+          #pragma omp barrier
+          if (m_length > 0 && !a_buffer_local) {
+            a_buffer_local = (float *) aligned_alloc(ALIGNMENT_SIZE, K_BLOCK_SIZE * M_BLOCK_SIZE * sizeof(float));
+          }
+          for (m = 0; m < m_length; m += M_BLOCK_SIZE) {
+            M0 = min(M_BLOCK_SIZE, m_length - m);
+            M_padding = M0 % 32 > 16 ? 32 - M0 % 32 : 0;
+            packing_a_64(alpha, A + (m_offset + m) + k * lda, a_buffer_local, lda, M0, K0, M_padding); // pad to 64 or 32
+            macro_kernel_large(a_buffer_local, b_buffer_local, C + (m_offset + m) + n * ldc, M0, K0, N0, ldc, M_padding);
+          }
+          #pragma omp barrier
         }
       }
     }
-  } else {
-    // large matrix: 64xkx4 and 32xkx4, packing
-    for (n = 0; n < N; n += N_BLOCK_SIZE) {
-      N0 = min(N_BLOCK_SIZE, N - n);
-      for (k = 0; k < K; k += K_BLOCK_SIZE) {
-        K0 = min(K_BLOCK_SIZE, K - k);
-        packing_b_4(B + k + n * ldb, b_buffer, ldb, K0, N0);
-        for (m = 0; m < M; m += M_BLOCK_SIZE) {
-          M0 = min(M_BLOCK_SIZE, M - m);
-          M_padding = M0 % 32 > 16 ? 32 - M0 % 32 : 0;
-          packing_a_64(A + m + k * lda, a_buffer, lda, M0, K0, M_padding); // pad to 64 or 32
-          macro_kernel_large(a_buffer, b_buffer, C + m + n * ldc, M0, K0, N0, ldc, M_padding);
-        }
-      }
-    }
+    if (a_buffer_local) { free(a_buffer_local); }
   }
-
-  free(a_buffer);
-  free(b_buffer);
+  if (b_buffer_global) { free(b_buffer_global); }
 }
-
-// static inline int pad_size(int size) {
-//     return ((size + 63) / 64) * 64;
-// }
-
-// static void copy_transform(const float* src, float* dst, int rows, int cols, int rows_padded, int cols_padded, bool transpose) {
-//   if (!transpose) {
-//     // Copy as is (column-major)
-//     for (int i = 0; i < cols; ++i) {
-      // memcpy(dst + i * rows_padded, src + i * rows_padded, sizeof(float) * rows);
-//     }
-//   } else {
-//     for(int i = 0; i < rows; ++i){
-//       for(int j = 0; j < cols; ++j) {
-//         dst[j * rows_padded + i] = src[i * cols + j];
-//       }
-//     }
-//   }
-// }
-
-// // Helper function to copy and optionally transpose the result matrix from padded to output
-// static void copy_result_transform(const float* src, float* dst, int M, int N, int M_padded, int N_padded, bool transpose) {
-//     if (!transpose) {
-//         // Copy as is (column-major)
-//         for(int j = 0; j < N; ++j){
-//             for(int i = 0; i < M; ++i){
-//                 dst[j * M + i] = src[j * M + i];
-//             }
-//         }
-//     } else {
-//         // Transpose while copying (convert column-major to row-major)
-//         for(int i = 0; i < M; ++i){
-//             for(int j = 0; j < N; ++j){
-//                 dst[i * N + j] = src[j * M + i];
-//             }
-//         }
-//     }
-// }
-
-// /*If TRANSA is true, A is row-major. If TRANSA is false, A is column-major
-//   Pad to 64*/
-// void custom_sgemm(int M, int K, int N, float* A, float* B, float* C, bool TRANSA, bool TRANSB, bool TRANSC) {
-//     int M_padded = pad_size(M);
-//     int K_padded = pad_size(K);
-//     int N_padded = pad_size(N);
-    
-//     // Allocate padded matrices
-//     float* A_padded = (float*)calloc(M_padded * K_padded, sizeof(float));
-//     float* B_padded = (float*)calloc(K_padded * N_padded, sizeof(float));
-//     float* C_padded = (float*)calloc(M_padded * N_padded, sizeof(float));
-    
-//     if (!A_padded || !B_padded || !C_padded) {
-//         fprintf(stderr, "Memory allocation failed\n");
-//         exit(EXIT_FAILURE);
-//     }
-
-//     copy_and_transform(A, A_padded, M, K, TRANSA);
-//     copy_and_transform(B, B_padded, K, N, TRANSB);
-    
-//     padded_sgemm(M_padded, K_padded, N_padded, A_padded, B_padded, C_padded);
-//     copy_result(C_padded, C, M, N, TRANSC);
-    
-//     free(A_padded);
-//     free(B_padded);
-//     free(C_padded);
-
-// }
 
 void reference_sgemm(int M, int K, int N, float* A, float* B, float* C, int TRANSA, int TRANSB, int TRANSC) {
   for (int i = 0; i < M; ++i)

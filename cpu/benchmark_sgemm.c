@@ -28,7 +28,7 @@
 
 /* Your function must have the following signature: */
 extern const char* sgemm_desc;
-extern void custom_sgemm (int, int, int, float*, float*, float*);
+extern void custom_sgemm (int, int, int, float*, float*, float*, float);
 extern void reference_sgemm (int, int, int, float*, float*, float*, int, int, int);
 
 double wall_time ()
@@ -180,7 +180,7 @@ int main (int argc, char **argv)
     {
       C_g[i] = initial;
     }
-    custom_sgemm (m, k, n, A, B, C);
+    custom_sgemm (m, k, n, A, B, C, 1.0);
     reference_sgemm(m, k, n, A, B, C_g, 1, 1, 1);
 
     for (int i = 0; i < m * n; ++i)
