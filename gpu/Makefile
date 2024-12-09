@@ -1,6 +1,6 @@
 CUDAC = nvcc
 
-CUDAOPT =
+CUDAOPT = -Xptxas -O3 -use_fast_math -arch=sm_80
 
 CUDAFLAGS = $(CUDAOPT)
 
