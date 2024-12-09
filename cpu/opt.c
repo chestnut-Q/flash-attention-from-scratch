@@ -156,12 +156,38 @@ static void padded_attention(float* Q, float* K, float* V, float* Y, float *S, i
 
 void square_attention (int n, float* Q, float* K, float* V, float* Y, int rank, int size)
 {
+    int m_offset = 0, m_length = 0;
+    partition_m_dim(rank, size, n, &m_offset, &m_length);
+
+    // scatter Q
+    float *Q_global = NULL;
+    if (rank == 0) {
+        Q_global = Q;
+    }
+    
+    // Use MPI_Scatterv to distribute Q
+    int *sendcounts_Q = NULL;
+    int *displs_Q = NULL;
+    if (rank == 0) {
+        sendcounts_Q = (int*)malloc(size * sizeof(int));
+        displs_Q = (int*)malloc(size * sizeof(int));
+        for (int i = 0; i < size; i++) {
+            int offset, length;
+            partition_m_dim(i, size, n, &offset, &length);
+            sendcounts_Q[i] = length * n;
+            displs_Q[i] = offset * n;
+        }
+    }
+    
+    MPI_Scatterv(Q_global, sendcounts_Q, displs_Q, MPI_FLOAT, Q, m_length * n, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    
+    MPI_Bcast(K, n * n, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(V, n * n, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    
+    // local attention
     const int ALIGN = 64;
     const float softmax_scale = 1.0 / sqrt(n);
     float *QT_l, *K_g, *VT_g, *YT_l, *ST_l, *padded_memory;
-    int m_offset = 0, m_length = 0;
-    partition_m_dim(rank, size, n, &m_offset, &m_length);
-    // printf("rank: %d, size: %d, n: %d, m_length: %d\n", rank, size, n,  m_length);
     int padded_n = ((n + ALIGN - 1) / ALIGN) * ALIGN;
     int padded_m = ((m_length + ALIGN - 1) / ALIGN) * ALIGN;
     padded_memory = (float*)calloc(3 * padded_n * padded_m + 2 * padded_n * padded_n, sizeof(float));
@@ -185,4 +211,25 @@ void square_attention (int n, float* Q, float* K, float* V, float* Y, int rank, 
     copy_result_and_transform(YT_l, Y, m_length, padded_m, n, padded_n, 0);
 
     free(padded_memory);
+    
+    // gather output
+    float *Y_global = NULL;
+    if (rank == 0) {
+        Y_global = Y;
+    }
+    
+    // Use MPI_Gatherv to collect Y from all ranks
+    int *recvcounts_Y = NULL;
+    int *displs_Y = NULL;
+    if (rank == 0) {
+        recvcounts_Y = (int*)malloc(size * sizeof(int));
+        displs_Y = (int*)malloc(size * sizeof(int));
+        for (int i = 0; i < size; i++) {
+            int offset, length;
+            partition_m_dim(i, size, n, &offset, &length);
+            recvcounts_Y[i] = length * n;
+            displs_Y[i] = offset * n;
+        }
+    }
+    MPI_Gatherv(Y, m_length * n, MPI_FLOAT, Y_global, recvcounts_Y, displs_Y, MPI_FLOAT, 0, MPI_COMM_WORLD);
 }
