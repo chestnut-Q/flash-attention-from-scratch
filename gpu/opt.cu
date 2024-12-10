@@ -39,7 +39,7 @@ __global__ void fwd_kernel(const float *Q, const float *K, const float *V, float
 
     extern __shared__ float smem[];
 
-    float* sQ = smem; // kBlockK * kBlockM, shared with sO
+    float* sQ = smem; // kBlockK * kBlockM
     float* sK = &smem[kBlockK * kBlockM]; // kBlockK * kBlockN
     float* sV = &smem[kBlockK * (kBlockM + kBlockN)]; // kBlockK * kBlockN
     float* sS = &smem[kBlockK * (kBlockM + 2 * kBlockN)]; // kBlockM * kBlockN 
