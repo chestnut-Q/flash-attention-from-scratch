@@ -8,7 +8,6 @@
 const char* version_name = "Optimized implementation.";
 
 extern void custom_sgemm (int, int, int, float*, float*, float*, float);
-extern void reference_sgemm (int, int, int, float*, float*, float*, int, int, int);
 /*
 transpose: 由 row-major 转为 column-major
 */
@@ -66,52 +65,9 @@ static inline void partition_m_dim(const int rank, const int size, const int m, 
     }
 }
 
-static void padded_attention_naive(float* Q, float* K, float* V, float* Y, float *S, int m, const int padded_m, const int n, const int padded_n, const float softmax_scale) {
-    const int kHeadDim = padded_n;
-    // 计算 S^T = K * Q^T
-    reference_sgemm(padded_n, kHeadDim, padded_m, K, Q, S, 1, 1, 1);
-    
-    // 归一化 S^T
-    for (int i = 0; i < padded_m; i++) {
-        for (int j = 0; j < padded_n; j++) {
-            if (j >= n) {
-                S[i * padded_n + j] = -INFINITY;
-            } else {
-                S[i * padded_n + j] *= softmax_scale;
-            }
-        }
-    }
-
-    // P^T = softmax(S^T)
-    for (int i = 0; i < padded_m; i++) {
-        float max_val = -INFINITY;
-        for (int j = 0; j < padded_n; j++) {
-            if (S[i * padded_n + j] > max_val) {
-                max_val = S[i * padded_n + j];
-            }
-        }
-
-        float sum_exp = 0;
-        // 计算Softmax的分母
-        for (int j = 0; j < padded_n; j++) {
-            S[i * padded_n + j] = expf(S[i * padded_n + j] - max_val);  // 减去最大值来避免溢出
-            sum_exp += S[i * padded_n + j];
-        }
-
-        // 计算Softmax结果
-        for (int j = 0; j < padded_n; j++) {
-            S[i * padded_n + j] /= sum_exp;
-        }
-    }
-
-    // 计算 Y^T = V^T * P^T
-    reference_sgemm(kHeadDim, padded_n, padded_m, V, S, Y, 1, 1, 1);
-}
-
 static void padded_attention(float* Q, float* K, float* V, float* Y, float *S, int m, const int padded_m, const int n, const int padded_n, const float softmax_scale) {
     const int kHeadDim = padded_n;
     // 计算 S^T = K * Q^T * softmax_scale
-    // reference_sgemm(padded_n, kHeadDim, padded_m, K, Q, S, 1, 1, 1);
     custom_sgemm(padded_n, kHeadDim, padded_m, K, Q, S, softmax_scale);
     
     // P^T = softmax(S^T)

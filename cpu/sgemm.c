@@ -169,37 +169,6 @@ static void packing_b_8(float *src, float *dst, int ldb, int K0, int N0) {
   }
 }
 
-static void nontrans_packing_b_8(float *src, float *dst, int ldb, int K0, int N0) {
-  float *src0_ptr, *src1_ptr, *src2_ptr, *src3_ptr, *src4_ptr, *src5_ptr, *src6_ptr, *src7_ptr, *dst_ptr;
-  dst_ptr = dst;
-  int count_first, count_second, count_sub = N0;
-  for (count_second = 0; count_sub > 7; count_second += 8, count_sub -= 8) {
-    src0_ptr = src + count_second * ldb; src1_ptr = src0_ptr + ldb;
-    src2_ptr = src1_ptr + ldb; src3_ptr = src2_ptr + ldb;
-    src4_ptr = src3_ptr + ldb; src5_ptr = src4_ptr + ldb;
-    src6_ptr = src5_ptr + ldb; src7_ptr = src6_ptr + ldb;
-
-    for (count_first = 0; count_first < K0; count_first++) {
-      *dst_ptr = *src0_ptr; dst_ptr++; src0_ptr++;
-      *dst_ptr = *src1_ptr; dst_ptr++; src1_ptr++;
-      *dst_ptr = *src2_ptr; dst_ptr++; src2_ptr++;
-      *dst_ptr = *src3_ptr; dst_ptr++; src3_ptr++;
-      *dst_ptr = *src4_ptr; dst_ptr++; src4_ptr++;
-      *dst_ptr = *src5_ptr; dst_ptr++; src5_ptr++;
-      *dst_ptr = *src6_ptr; dst_ptr++; src6_ptr++;
-      *dst_ptr = *src7_ptr; dst_ptr++; src7_ptr++;
-    }
-  }
-  for (; count_sub > 0; count_second++, count_sub--) {
-    src0_ptr = src + count_second * ldb;
-    for (count_first = 0; count_first < K0; count_first++) {
-      *dst_ptr = *src0_ptr;
-      dst_ptr++;
-      src0_ptr++;
-    }
-  }
-}
-
 #define KERNEL_K1_32x4_avx512\
   a0 = _mm512_load_ps(ptr_a);\
   a1 = _mm512_load_ps(ptr_a + 16);\
@@ -247,36 +216,6 @@ static void nontrans_packing_b_8(float *src, float *dst, int ldb, int K0, int N0
   c17 = _mm512_fmadd_ps(a1, b3, c17);\
   ptr_a += 32;\
   ptr_b += 8;
-
-#define KERNEL_K1_nopacking_32x8_avx512\
-  a0 = _mm512_load_ps(ptr_a);\
-  a1 = _mm512_load_ps(ptr_a + 16);\
-  b0 = _mm512_set1_ps(*ptr_b);\
-  b1 = _mm512_set1_ps(*(ptr_b + ldb));\
-  b2 = _mm512_set1_ps(*(ptr_b + 2 * ldb));\
-  b3 = _mm512_set1_ps(*(ptr_b + 3 * ldb));\
-  c00 = _mm512_fmadd_ps(a0, b0, c00);\
-  c01 = _mm512_fmadd_ps(a0, b1, c01);\
-  c02 = _mm512_fmadd_ps(a0, b2, c02);\
-  c03 = _mm512_fmadd_ps(a0, b3, c03);\
-  c10 = _mm512_fmadd_ps(a1, b0, c10);\
-  c11 = _mm512_fmadd_ps(a1, b1, c11);\
-  c12 = _mm512_fmadd_ps(a1, b2, c12);\
-  c13 = _mm512_fmadd_ps(a1, b3, c13);\
-  b0 = _mm512_set1_ps(*(ptr_b + 4 * ldb));\
-  b1 = _mm512_set1_ps(*(ptr_b + 5 * ldb));\
-  b2 = _mm512_set1_ps(*(ptr_b + 6 * ldb));\
-  b3 = _mm512_set1_ps(*(ptr_b + 7 * ldb));\
-  c04 = _mm512_fmadd_ps(a0, b0, c04);\
-  c05 = _mm512_fmadd_ps(a0, b1, c05);\
-  c06 = _mm512_fmadd_ps(a0, b2, c06);\
-  c07 = _mm512_fmadd_ps(a0, b3, c07);\
-  c14 = _mm512_fmadd_ps(a1, b0, c14);\
-  c15 = _mm512_fmadd_ps(a1, b1, c15);\
-  c16 = _mm512_fmadd_ps(a1, b2, c16);\
-  c17 = _mm512_fmadd_ps(a1, b3, c17);\
-  ptr_a += lda;\
-  ptr_b++;
 
 #define KERNEL_K1_64x4_avx512\
   a0 = _mm512_load_ps(ptr_a);\
@@ -396,39 +335,6 @@ static void block_sgemm_kernel_32xkx8_avx512(float *__restrict__ A, float *__res
     _mm512_storeu_ps(C + 16 + ldc * 6, _mm512_add_ps(c16, _mm512_loadu_ps(C + 16 + ldc * 6)));
     _mm512_storeu_ps(C + 16 + ldc * 7, _mm512_add_ps(c17, _mm512_loadu_ps(C + 16 + ldc * 7)));
   }
-}
-
-static void block_sgemm_kernel_nopacking_32xkx8_avx512(float *__restrict__ A, float *__restrict__ B, float *__restrict__ C, int M, int K, int lda, int ldb, int ldc) {
-  float *ptr_a, *ptr_b;
-  ptr_a = A;
-  ptr_b = B;
-  c00 = _mm512_setzero_ps(); c01 = _mm512_setzero_ps();
-  c02 = _mm512_setzero_ps(); c03 = _mm512_setzero_ps();
-  c04 = _mm512_setzero_ps(); c05 = _mm512_setzero_ps();
-  c06 = _mm512_setzero_ps(); c07 = _mm512_setzero_ps();
-  c10 = _mm512_setzero_ps(); c11 = _mm512_setzero_ps();
-  c12 = _mm512_setzero_ps(); c13 = _mm512_setzero_ps();
-  c14 = _mm512_setzero_ps(); c15 = _mm512_setzero_ps();
-  c16 = _mm512_setzero_ps(); c17 = _mm512_setzero_ps();
-  for (int k = 0; k < K; k++) {
-    KERNEL_K1_nopacking_32x8_avx512
-  }
-  _mm512_storeu_ps(C, _mm512_add_ps(c00, _mm512_loadu_ps(C)));
-  _mm512_storeu_ps(C + ldc, _mm512_add_ps(c01, _mm512_loadu_ps(C + ldc)));
-  _mm512_storeu_ps(C + ldc * 2, _mm512_add_ps(c02, _mm512_loadu_ps(C + ldc * 2)));
-  _mm512_storeu_ps(C + ldc * 3, _mm512_add_ps(c03, _mm512_loadu_ps(C + ldc * 3)));
-  _mm512_storeu_ps(C + ldc * 4, _mm512_add_ps(c04, _mm512_loadu_ps(C + ldc * 4)));
-  _mm512_storeu_ps(C + ldc * 5, _mm512_add_ps(c05, _mm512_loadu_ps(C + ldc * 5)));
-  _mm512_storeu_ps(C + ldc * 6, _mm512_add_ps(c06, _mm512_loadu_ps(C + ldc * 6)));
-  _mm512_storeu_ps(C + ldc * 7, _mm512_add_ps(c07, _mm512_loadu_ps(C + ldc * 7)));
-  _mm512_storeu_ps(C + 16, _mm512_add_ps(c10, _mm512_loadu_ps(C + 16)));
-  _mm512_storeu_ps(C + 16 + ldc, _mm512_add_ps(c11, _mm512_loadu_ps(C + 16 + ldc)));
-  _mm512_storeu_ps(C + 16 + ldc * 2, _mm512_add_ps(c12, _mm512_loadu_ps(C + 16 + ldc * 2)));
-  _mm512_storeu_ps(C + 16 + ldc * 3, _mm512_add_ps(c13, _mm512_loadu_ps(C + 16 + ldc * 3)));
-  _mm512_storeu_ps(C + 16 + ldc * 4, _mm512_add_ps(c14, _mm512_loadu_ps(C + 16 + ldc * 4)));
-  _mm512_storeu_ps(C + 16 + ldc * 5, _mm512_add_ps(c15, _mm512_loadu_ps(C + 16 + ldc * 5)));
-  _mm512_storeu_ps(C + 16 + ldc * 6, _mm512_add_ps(c16, _mm512_loadu_ps(C + 16 + ldc * 6)));
-  _mm512_storeu_ps(C + 16 + ldc * 7, _mm512_add_ps(c17, _mm512_loadu_ps(C + 16 + ldc * 7)));
 }
 
 static void block_sgemm_kernel_32xkx4_avx512(float *__restrict__ A, float *__restrict__ B, float *__restrict__ C, int K, int ldc, __mmask16 mask) {
@@ -603,34 +509,6 @@ static void kernel_n_8(float *__restrict__ A, float *__restrict__ B, float *__re
   }
 }
 
-static void kernel_n_8_nopacking(float *__restrict__ A, float *__restrict__ B, float *__restrict__ C, int M, int K, int lda, int ldb, int ldc) {
-  int m, m_sub;
-  int k;
-  float *ptr_packing_a, *ptr_packing_b;
-
-  // block sgemm
-  for (m = 0, m_sub = M; m_sub > 31; m_sub -= 32, m += 32) {
-    block_sgemm_kernel_nopacking_32xkx8_avx512(A + m, B, C + m, M, K, lda, ldb, ldc);
-  }
-
-  // edge case
-  for (; m_sub > 0; m_sub--, m++) {
-    ptr_packing_a = A + m;
-    ptr_packing_b = B;
-    sc0 = sc1 = sc2 = sc3 = sc4 = sc5 = sc6 = sc7 = 0.;
-    for (k = 0; k < K; k++) {
-      sa = *ptr_packing_a;
-      sb0 = *ptr_packing_b; sb1 = *(ptr_packing_b + ldb); sb2 = *(ptr_packing_b + 2 * ldb); sb3 = *(ptr_packing_b + 3 * ldb);
-      sb4 = *(ptr_packing_b + 4 * ldb); sb5 = *(ptr_packing_b + 5 * ldb); sb6 = *(ptr_packing_b + 6 * ldb); sb7 = *(ptr_packing_b + 7 * ldb);
-      sc0 += sa * sb0; sc1 += sa * sb1; sc2 += sa * sb2; sc3 += sa * sb3;
-      sc4 += sa * sb4; sc5 += sa * sb5; sc6 += sa * sb6; sc7 += sa * sb7;
-      ptr_packing_a += lda; ptr_packing_b++;
-    }
-    C[m] += sc0; C[m + ldc] += sc1; C[m + ldc * 2] += sc2; C[m + ldc * 3] += sc3;
-    C[m + ldc * 4] += sc4; C[m + ldc * 5] += sc5; C[m + ldc * 6] += sc6; C[m + ldc * 7] += sc7;
-  }
-}
-
 static void macro_kernel_small(float *__restrict__ A, float *__restrict__ B, float *__restrict__ C, int M, int K, int N, int ldc, int M_padding) {
   int n, n_sub;
   MICRO_M_BLOCK_SIZE = 32, MICRO_N_BLOCK_SIZE = 8;
@@ -650,13 +528,6 @@ static void macro_kernel_large(float *__restrict__ A, float *__restrict__ B, flo
   }
   for (; n_sub > 0; n_sub--, n++) {
     kernel_n_1(A, B + n * K, C + n * ldc, M, K, ldc);
-  }
-}
-
-static void macro_kernel_nopacking(float *__restrict__ A, float *__restrict__ B, float *__restrict__ C, int M, int K, int N, int lda, int ldb, int ldc) {
-  int n, n_sub;
-  for (n = 0, n_sub = N; n_sub > 7; n_sub -= 8, n += 8) {
-    kernel_n_8_nopacking(A, B + n * ldb, C + n * ldc, M, K, lda, ldb, ldc);
   }
 }
 
@@ -788,19 +659,4 @@ void custom_sgemm(int M, int K, int N, float* A, float* B, float* C, float alpha
     if (a_buffer_local) { free(a_buffer_local); }
   }
   if (b_buffer_global) { free(b_buffer_global); }
-}
-
-void reference_sgemm(int M, int K, int N, float* A, float* B, float* C, int TRANSA, int TRANSB, int TRANSC) {
-  for (int i = 0; i < M; ++i)
-    for (int j = 0; j < N; ++j) 
-    {
-      float cij = TRANSC ? C[i+j*M] : C[i*N+j]; 
-      for( int k = 0; k < K; k++ ) {
-        cij += (TRANSA ? A[i+k*M] : A[i*K+k]) * (TRANSB ? B[k+j*K] : B[k*N+j]);
-      }
-      if (TRANSC)
-        C[i+j*M] = cij;
-      else
-        C[i*N+j] = cij;
-    }
 }
