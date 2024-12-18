@@ -107,9 +107,11 @@ void square_attention (int n, float* Q, float* K, float* V, float* Y, int rank, 
     partition_m_dim(rank, size, n, &m_offset, &m_length);
 
     MPI_Win win_Q, win_Y;
-    MPI_Win_create(Q, (rank == 0) ? (n * n * sizeof(float)) : 0, sizeof(float), MPI_INFO_NULL, MPI_COMM_WORLD, &win_Q);
-    MPI_Win_create(Y, (rank == 0) ? (n * n * sizeof(float)) : 0, sizeof(float), MPI_INFO_NULL, MPI_COMM_WORLD, &win_Y);
-    MPI_Barrier(MPI_COMM_WORLD);
+    if (size > 1) {
+        MPI_Win_create(Q, (rank == 0) ? (n * n * sizeof(float)) : 0, sizeof(float), MPI_INFO_NULL, MPI_COMM_WORLD, &win_Q);
+        MPI_Win_create(Y, (rank == 0) ? (n * n * sizeof(float)) : 0, sizeof(float), MPI_INFO_NULL, MPI_COMM_WORLD, &win_Y);
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
     
     const int ALIGN = 64;
     const float softmax_scale = 1.0 / sqrt(n);
@@ -128,13 +130,15 @@ void square_attention (int n, float* Q, float* K, float* V, float* Y, int rank, 
     YT_l = padded_memory + padded_n * padded_m + 2 * padded_n * padded_n; // padded_n * padded_m
     ST_l = padded_memory + 2 * padded_n * padded_m + 2 * padded_n * padded_n; // padded_n * padded_m
 
-    MPI_Win_fence(0, win_Q);
-    if (rank != 0) {
-        MPI_Get(Q, m_length * n, MPI_FLOAT, 0, m_offset * n, m_length * n, MPI_FLOAT, win_Q);
+    if (size > 1) {
+        MPI_Win_fence(0, win_Q);
+        if (rank != 0) {
+            MPI_Get(Q, m_length * n, MPI_FLOAT, 0, m_offset * n, m_length * n, MPI_FLOAT, win_Q);
+        }
+        MPI_Win_fence(0, win_Q);
+        MPI_Bcast(K, n * n, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(V, n * n, MPI_FLOAT, 0, MPI_COMM_WORLD);
     }
-    MPI_Win_fence(0, win_Q);
-    MPI_Bcast(K, n * n, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    MPI_Bcast(V, n * n, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
     padding_and_transpose(Q, QT_l, m_length, padded_m, n, padded_n, 0);
     padding_and_transpose(K, K_g, n, padded_n, n, padded_n, 1);
@@ -146,9 +150,11 @@ void square_attention (int n, float* Q, float* K, float* V, float* Y, int rank, 
 
     free(padded_memory);
 
-    MPI_Win_fence(0, win_Y);
-    if (rank != 0) {
-        MPI_Put(Y, m_length * n, MPI_FLOAT, 0, m_offset * n, m_length * n, MPI_FLOAT, win_Y);
+    if (size > 1) {
+        MPI_Win_fence(0, win_Y);
+        if (rank != 0) {
+            MPI_Put(Y, m_length * n, MPI_FLOAT, 0, m_offset * n, m_length * n, MPI_FLOAT, win_Y);
+        }
+        MPI_Win_fence(0, win_Y);
     }
-    MPI_Win_fence(0, win_Y);
 }

@@ -10,6 +10,14 @@ In the current version, Q, K, and V are all set as N×N single-precision matrice
 
 This guide outlines the steps for compiling and running the implementations in their respective directories.
 
+* First, generate the input and output data
+
+```bash
+cd cpu
+make gen_data
+./gen_data
+```
+
 * GPU Implementation
 
 ```bash
@@ -22,6 +30,7 @@ make
 
 ```bash
 cd cpu
-make opt
+make naive opt
+./naive # naive implementation
 srun -N 4 -n 8 ./opt
 ```

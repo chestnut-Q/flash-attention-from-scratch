@@ -79,10 +79,10 @@ int main(int argc, char const *argv[])
 	{
 		int n = test_sizes[isize];
 
-		read_from_file (cpu_Q,  n*n, "/home/2024-fall/t2024310696/dataset/hw3/Q_value/q_", isize);
-		read_from_file (cpu_K,  n*n, "/home/2024-fall/t2024310696/dataset/hw3/K_value/k_", isize);
-		read_from_file (cpu_V,  n*n, "/home/2024-fall/t2024310696/dataset/hw3/V_value/v_", isize);
-		read_from_file (cpu_Yt, n*n, "/home/2024-fall/t2024310696/dataset/hw3/output_value/output_", isize);
+		read_from_file (cpu_Q,  n*n, "../data/Q_value/q_", isize);
+		read_from_file (cpu_K,  n*n, "../data/K_value/k_", isize);
+		read_from_file (cpu_V,  n*n, "../data/V_value/v_", isize);
+		read_from_file (cpu_Yt, n*n, "../data/output_value/output_", isize);
 		memset (cpu_Y, 0, n * n * sizeof(float));
 
 		cudaMemcpy(gpu_Q, cpu_Q, sizeof(float) * n*n, cudaMemcpyHostToDevice);

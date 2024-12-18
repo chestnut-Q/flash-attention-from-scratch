@@ -5,8 +5,8 @@ CFLAGS = -Wall -DGETTIMEOFDAY -std=c++11 $(OPT) -march=skylake-avx512 -fopenmp
 LDFLAGS = -Wall 
 LDLIBS = -lpthread -lm -fopenmp
 
-targets =  naive opt sgemm
-objects =  benchmark.o naive.o opt.o benchmark_sgemm.o sgemm.o
+targets =  naive opt gen_data
+objects =  benchmark.o gen_data.o naive.o opt.o sgemm.o
 
 .PHONY : default
 default : all
@@ -18,7 +18,7 @@ naive : benchmark.o naive.o
 	$(CC) -o $@ $^ $(LDLIBS)
 opt : benchmark.o sgemm.o opt.o
 	$(CC) -o $@ $^ $(LDLIBS)
-sgemm : benchmark_sgemm.o sgemm.o
+gen_data : gen_data.o naive.o
 	$(CC) -o $@ $^ $(LDLIBS)
 
 %.o : %.c
